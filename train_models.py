@@ -152,6 +152,7 @@ def split_records(records: list[tuple[str, int]], seed: int = SEED) -> tuple[lis
 
 
 def train_nb(records: list[tuple[str, int]], positive_label: int) -> dict[str, object]:
+    """Train NB in two streaming passes to keep peak memory predictable."""
     document_frequency: Counter[str] = Counter()
     for text, _ in records:
         document_frequency.update(set(features(text)))
@@ -162,6 +163,8 @@ def train_nb(records: list[tuple[str, int]], positive_label: int) -> dict[str, o
     token_counts: dict[int, Counter[str]] = {0: Counter(), 1: Counter()}
     document_counts = Counter()
 
+    # Re-extract features in a second pass rather than retaining every sparse
+    # row in RAM; this is safer for the larger combined headline datasets.
     for text, label in records:
         document_counts[label] += 1
         token_counts[label].update(token for token in features(text) if token in vocabulary_set)
@@ -186,7 +189,6 @@ def train_nb(records: list[tuple[str, int]], positive_label: int) -> dict[str, o
         "weights": weights,
     }
 
-
 def predict_score(model: dict[str, object], text: str) -> float:
     weights = model["weights"]
     assert isinstance(weights, dict)
@@ -201,11 +203,21 @@ def sigmoid(value: float) -> float:
     return 1.0 / (1.0 + math.exp(-value))
 
 
-def fit_calibration(model: dict[str, object], records: list[tuple[str, int]], positive_label: int) -> dict[str, float]:
-    scores = [predict_score(model, text) for text, _ in records]
+def fit_calibration(
+    model: dict[str, object],
+    records: list[tuple[str, int]],
+    positive_label: int,
+    scores: list[float] | None = None,
+) -> dict[str, float]:
+    # Allow callers to reuse scores already computed for this split.
+    if scores is None:
+        scores = [predict_score(model, text) for text, _ in records]
     scale = sorted(abs(score) for score in scores)[len(scores) // 2] if scores else 1.0
     scale = max(scale, 1.0)
-    normalized = [(max(-8.0, min(8.0, score / scale)), int(label == positive_label)) for score, (_, label) in zip(scores, records)]
+    normalized = [
+        (max(-8.0, min(8.0, score / scale)), int(label == positive_label))
+        for score, (_, label) in zip(scores, records)
+    ]
     slope = 1.0
     intercept = 0.0
     learning_rate = 0.08
@@ -221,6 +233,9 @@ def fit_calibration(model: dict[str, object], records: list[tuple[str, int]], po
         grad_intercept /= count
         slope -= learning_rate * grad_slope
         intercept -= learning_rate * grad_intercept
+        # Stop early once the calibration parameters have effectively converged.
+        if max(abs(grad_slope), abs(grad_intercept)) < 1e-7:
+            break
     return {
         "scale": round(scale, 6),
         "slope": round(slope, 6),
@@ -238,11 +253,27 @@ def estimate_probability(model: dict[str, object], score: float) -> float:
     return sigmoid(slope * normalized + intercept)
 
 
-def metrics(model: dict[str, object], records: list[tuple[str, int]], positive_label: int) -> dict[str, float | int]:
+def metrics(
+    model: dict[str, object],
+    records: list[tuple[str, int]],
+    positive_label: int,
+    scores: list[float] | None = None,
+) -> dict[str, float | int]:
+    if scores is None:
+        scores = [predict_score(model, text) for text, _ in records]
+
     tp = tn = fp = fn = 0
-    for text, label in records:
-        predicted_positive = estimate_probability(model, predict_score(model, text)) >= 0.5
+    squared_error_sum = 0.0
+    log_loss_sum = 0.0
+    for (_, label), raw_score in zip(records, scores):
+        probability = estimate_probability(model, raw_score)
         actual_positive = label == positive_label
+        predicted_positive = probability >= 0.5
+        target = 1.0 if actual_positive else 0.0
+        squared_error_sum += (probability - target) ** 2
+        clipped = min(max(probability, 1e-15), 1.0 - 1e-15)
+        log_loss_sum -= target * math.log(clipped) + (1.0 - target) * math.log(1.0 - clipped)
+
         if predicted_positive and actual_positive:
             tp += 1
         elif predicted_positive and not actual_positive:
@@ -251,16 +282,32 @@ def metrics(model: dict[str, object], records: list[tuple[str, int]], positive_l
             fn += 1
         else:
             tn += 1
+
     total = tp + tn + fp + fn
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    specificity = tn / (tn + fp) if tn + fp else 0.0
+    negative_precision = tn / (tn + fn) if tn + fn else 0.0
+    negative_recall = specificity
+    f1_positive = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    f1_negative = (
+        2 * negative_precision * negative_recall / (negative_precision + negative_recall)
+        if negative_precision + negative_recall else 0.0
+    )
     return {
         "holdout_rows": total,
         "accuracy": round((tp + tn) / total, 4) if total else 0.0,
+        "balanced_accuracy": round((recall + specificity) / 2, 4),
         "precision_positive_class": round(precision, 4),
         "recall_positive_class": round(recall, 4),
-        "f1_positive_class": round(f1, 4),
+        "f1_positive_class": round(f1_positive, 4),
+        "precision_negative_class": round(negative_precision, 4),
+        "recall_negative_class": round(negative_recall, 4),
+        "f1_negative_class": round(f1_negative, 4),
+        "macro_f1": round((f1_positive + f1_negative) / 2, 4),
+        "specificity": round(specificity, 4),
+        "brier_score": round(squared_error_sum / total, 6) if total else 0.0,
+        "log_loss": round(log_loss_sum / total, 6) if total else 0.0,
         "true_positive": tp,
         "true_negative": tn,
         "false_positive": fp,
@@ -273,11 +320,18 @@ def build_model(records: list[tuple[str, int]], positive_label: int, positive_na
     model = train_nb(train, positive_label)
     model["positive_name"] = positive_name
     model["negative_name"] = negative_name
-    model["calibration"] = fit_calibration(model, calibration_records, positive_label)
+
+    # Score each evaluation split once, then reuse those scores for calibration
+    # and reporting instead of repeating tokenization and feature lookups.
+    calibration_scores = [predict_score(model, text) for text, _ in calibration_records]
+    model["calibration"] = fit_calibration(
+        model, calibration_records, positive_label, scores=calibration_scores
+    )
+    validation_scores = [predict_score(model, text) for text, _ in validation]
     report = {
         "training_rows": len(train),
         "calibration_rows": len(calibration_records),
-        **metrics(model, validation, positive_label),
+        **metrics(model, validation, positive_label, scores=validation_scores),
     }
     return model, report
 

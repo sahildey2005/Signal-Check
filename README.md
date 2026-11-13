@@ -29,3 +29,17 @@ On the held-out part of the supplied files, the clickbait model reached **97.8% 
 The fake/true labels are inherited from the filenames and are not independent fact-checks. Both models can learn quirks of the datasets, such as topic, time period, and publisher style. Their percentages are model estimates, not calibrated real-world probabilities. A headline alone cannot establish that a story is true or false. Use the related-coverage and fact-check searches to compare reporting and evidence.
 
 Headlines are analyzed locally in the browser. Search terms are sent to the search provider only if a coverage link is opened.
+
+
+## Developer checks
+
+Run the dependency-free regression tests before changing the trainer:
+
+```text
+python -m py_compile train_models.py
+python -m unittest discover -s tests -v
+```
+
+The test workflow also runs these checks on Python 3.10 and 3.12. The trainer reports holdout accuracy, balanced accuracy, per-class precision/recall/F1, macro F1, specificity, Brier score, and log loss. These metrics still describe only the supplied holdout split; they are not evidence of real-world fact-checking accuracy.
+
+The optimized trainer keeps the existing browser model fields. It makes two feature-extraction passes during training to avoid storing every headline's sparse features in memory, reuses calibration/holdout scores, and stops calibration early when its gradients converge.
