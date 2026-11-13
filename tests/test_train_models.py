@@ -12,7 +12,7 @@ class TextProcessingTests(unittest.TestCase):
     def test_normalize_title_is_stable(self):
         self.assertEqual(
             tm.normalize_title("  “BREAKING”  News—It’s HERE! "),
-            "breaking news it s here",
+            "breaking news it's here",
         )
 
     def test_features_include_tokens_bigrams_and_style(self):
