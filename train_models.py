@@ -152,14 +152,10 @@ def split_records(records: list[tuple[str, int]], seed: int = SEED) -> tuple[lis
 
 
 def train_nb(records: list[tuple[str, int]], positive_label: int) -> dict[str, object]:
-    """Train the browser-compatible NB model while extracting each row once."""
-    # Counter objects retain term frequency for NB and unique keys for document
-    # frequency. Reusing them avoids running regex/tokenization twice per row.
-    feature_rows = [Counter(features(text)) for text, _ in records]
-
+    """Train NB in two streaming passes to keep peak memory predictable."""
     document_frequency: Counter[str] = Counter()
-    for row_features in feature_rows:
-        document_frequency.update(row_features.keys())
+    for text, _ in records:
+        document_frequency.update(set(features(text)))
 
     eligible = [token for token, count in document_frequency.items() if count >= MIN_DOCUMENT_FREQUENCY]
     vocabulary = sorted(eligible, key=lambda token: (-document_frequency[token], token))[:MAX_FEATURES]
@@ -167,11 +163,11 @@ def train_nb(records: list[tuple[str, int]], positive_label: int) -> dict[str, o
     token_counts: dict[int, Counter[str]] = {0: Counter(), 1: Counter()}
     document_counts = Counter()
 
-    for (_, label), row_features in zip(records, feature_rows):
+    # Re-extract features in a second pass rather than retaining every sparse
+    # row in RAM; this is safer for the larger combined headline datasets.
+    for text, label in records:
         document_counts[label] += 1
-        token_counts[label].update(
-            {token: count for token, count in row_features.items() if token in vocabulary_set}
-        )
+        token_counts[label].update(token for token in features(text) if token in vocabulary_set)
 
     vocabulary_size = max(1, len(vocabulary))
     totals = {label: sum(token_counts[label].values()) for label in (0, 1)}
@@ -192,7 +188,6 @@ def train_nb(records: list[tuple[str, int]], positive_label: int) -> dict[str, o
         "vocabulary_size": len(vocabulary),
         "weights": weights,
     }
-
 
 def predict_score(model: dict[str, object], text: str) -> float:
     weights = model["weights"]
@@ -268,15 +263,13 @@ def metrics(
         scores = [predict_score(model, text) for text, _ in records]
 
     tp = tn = fp = fn = 0
-    probability_sum = 0.0
     squared_error_sum = 0.0
     log_loss_sum = 0.0
-    for (text, label), raw_score in zip(records, scores):
+    for (_, label), raw_score in zip(records, scores):
         probability = estimate_probability(model, raw_score)
         actual_positive = label == positive_label
         predicted_positive = probability >= 0.5
         target = 1.0 if actual_positive else 0.0
-        probability_sum += probability
         squared_error_sum += (probability - target) ** 2
         clipped = min(max(probability, 1e-15), 1.0 - 1e-15)
         log_loss_sum -= target * math.log(clipped) + (1.0 - target) * math.log(1.0 - clipped)
