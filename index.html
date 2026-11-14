@@ -67,7 +67,11 @@
     .headline-input::placeholder { color: #a2aca5; }
     .headline-input:focus { border-color: #4c9079; box-shadow: 0 0 0 3px rgba(23, 108, 88, .12); }
     .input-meta { display: flex; justify-content: space-between; gap: 12px; padding: 8px 1px 0; color: #8a9690; font-size: 10px; }
-    .actions { display: flex; align-items: center; gap: 10px; margin-top: 19px; }
+    .actions { display: flex; align-items: center; gap: 10px; margin-top: 19px; flex-wrap: wrap; }
+    .secondary-actions { display: flex; gap: 8px; margin-top: 9px; }
+    .secondary-actions button { min-height: 35px; padding: 0 11px; color: #607168; background: transparent; border: 1px solid var(--line); border-radius: 9px; font-size: 10px; font-weight: 700; cursor: pointer; }
+    .secondary-actions button:hover { color: var(--green); background: #f4f7f1; border-color: #b8c8bc; }
+    .secondary-actions button:disabled { cursor: wait; opacity: .55; }
     .primary-button, .sample-button { min-height: 44px; border-radius: 11px; font-size: 12px; font-weight: 750; cursor: pointer; transition: transform .15s, background .15s, border-color .15s; }
     .primary-button:disabled, .sample-button:disabled { cursor: wait; opacity: .55; transform: none; }
     .primary-button { display: inline-flex; justify-content: center; align-items: center; gap: 9px; flex: 1; padding: 0 16px; color: #fff; background: var(--green); border: 1px solid var(--green); }
@@ -128,6 +132,15 @@
     .model-evidence { margin-top: 10px !important; }
     .model-metrics { margin-top: 9px !important; color: #89948d !important; font-size: 9px !important; }
     .model-source-note { margin-top: 11px; padding: 10px 12px; color: #6a7064; background: #f5f3e9; border-radius: 10px; font-size: 10px; }
+    .score-explainer { margin-top: 12px; padding: 13px 14px; background: #f2f7f1; border: 1px solid #e1ebe0; border-radius: 12px; }
+    .score-explainer strong { display: block; margin-bottom: 4px; color: #315b49; font-size: 11px; }
+    .score-explainer p { margin: 0; color: #607168; font-size: 10px; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; margin-top: 10px; }
+    .metric { min-width: 0; padding: 7px 5px; background: #f1f4ee; border-radius: 7px; text-align: center; }
+    .metric strong { display: block; color: #355d4c; font-size: 10px; }
+    .metric span { display: block; margin-top: 2px; color: #7b8980; font-size: 8px; }
+    .model-result .model-metrics { line-height: 1.5; }
+    @media (max-width: 540px) { .metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     .footer { display: flex; justify-content: space-between; gap: 20px; padding: 2px 0 26px; color: #829087; font-size: 10px; }
     .footer strong { color: #53675b; font-weight: 700; }
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
@@ -201,7 +214,11 @@
               Check this headline
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <button class="sample-button" id="sample" type="button">Try an example</button>
+            <button class="sample-button" id="sample" type="button">Try clickbait example</button>
+          </div>
+          <div class="secondary-actions">
+            <button id="neutral-sample" type="button">Try a neutral example</button>
+            <button id="reset" type="button">Clear and reset</button>
           </div>
           <p class="privacy-note"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5 4 5v4.3c0 3.6 2.4 6.6 6 8.2 3.6-1.6 6-4.6 6-8.2V5l-6-2.5Z" stroke="currentColor" stroke-width="1.5"/><path d="m7.3 10 1.7 1.7 3.8-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Your headline stays in this browser. Search terms are shared with a search provider only if you open a coverage link.</span></p>
           <p class="model-status" id="model-status" role="status">Loading the trained headline models…</p>
@@ -231,6 +248,9 @@
     const analyzeButton = document.getElementById('analyze');
     const sampleButton = document.getElementById('sample');
     const sampleHeadline = "You won't believe what scientists just discovered beneath the ocean!";
+    const neutralHeadline = "Researchers publish new findings from a study of ocean temperatures.";
+    const neutralSampleButton = document.getElementById('neutral-sample');
+    const resetButton = document.getElementById('reset');
     let trainedModels = null;
 
     headlineInput.addEventListener('input', () => {
@@ -238,11 +258,23 @@
       headlineInput.removeAttribute('aria-invalid');
     });
 
-    sampleButton.addEventListener('click', () => {
-      headlineInput.value = sampleHeadline;
+    sampleButton.addEventListener('click', () => loadExample(sampleHeadline));
+    neutralSampleButton.addEventListener('click', () => loadExample(neutralHeadline));
+    resetButton.addEventListener('click', resetChecker);
+
+    function loadExample(value) {
+      headlineInput.value = value;
       headlineInput.dispatchEvent(new Event('input'));
       analyzeHeadline();
-    });
+    }
+
+    function resetChecker() {
+      headlineInput.value = '';
+      headlineInput.dispatchEvent(new Event('input'));
+      headlineInput.removeAttribute('aria-invalid');
+      results.innerHTML = `<div class="empty-state"><div class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="10.8" cy="10.8" r="6.8" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 4.5 4.5M8.2 10.8h5.2m-2.6-2.6v5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div><h3>Clarity starts with a closer look.</h3><p>Enter a headline to compare it with examples in the supplied datasets and find other coverage of the same topic.</p></div>`;
+      headlineInput.focus();
+    }
     analyzeButton.addEventListener('click', analyzeHeadline);
     headlineInput.addEventListener('keydown', event => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') analyzeHeadline();
@@ -260,11 +292,15 @@
         }
         analyzeButton.disabled = false;
         sampleButton.disabled = false;
+        neutralSampleButton.disabled = false;
+        resetButton.disabled = false;
         modelStatus.classList.add('ready');
         modelStatus.textContent = `Models ready · ${trainedModels.report.clickbait_source.usable_unique_headlines.toLocaleString()} clickbait headlines · ${trainedModels.report.fake_real_source.usable_unique_headlines.toLocaleString()} fake/real headlines`;
       } catch (error) {
         analyzeButton.disabled = true;
         sampleButton.disabled = true;
+        neutralSampleButton.disabled = true;
+        resetButton.disabled = true;
         modelStatus.classList.remove('ready');
         modelStatus.textContent = location.protocol === 'file:'
           ? 'Models could not load from a direct file preview. Start the app with run.bat.'
@@ -295,8 +331,7 @@
       results.innerHTML = `
         <div class="result-content">
           <div class="result-summary">
-            <h3>Headline compared with both training datasets</h3>
-            <span class="status-pill ${clickbaitState.tone}">${clickbaitState.short}</span>
+            <h3>Two separate model checks</h3>
           </div>
           ${renderModelResult({
             title: 'Clickbait model',
@@ -319,7 +354,9 @@
             negativeCaption: 'true-labeled',
             isFake: true
           })}
-          <div class="model-source-note">These are estimates from the supplied datasets, not proof that this specific story is fake or true.</div>
+          <div class="score-explainer"><strong>How to read these scores</strong><p>Each score is the model's output for its positive training label, shown on a 0–100 scale. It is not the probability that a real-world story is true or false. A higher score means the headline more strongly matches patterns learned from that dataset.</p></div>
+          <div class="model-source-note">The fake/true model learns labels inherited from the supplied Fake.csv and True.csv files. It does not independently verify facts, sources, dates, or article evidence.</div>
+          <details class="model-source-note"><summary>About the models and evaluation</summary><p>Both classifiers use Multinomial Naive Bayes with unigram, bigram, and headline-style features. Headlines are deduplicated and split into 70% training, 15% calibration, and 15% holdout data (seed 42). The holdout metrics below describe only those supplied datasets.</p><p>${escapeHTML(trainedModels.report.split || '')}</p></details>
           <div class="coverage"><h4>Explore related coverage</h4><div class="coverage-links">${links}</div></div>
         </div>`;
     }
@@ -401,11 +438,18 @@
       const metricName = isFake ? 'fake/real' : 'clickbait';
       return `
         <section class="model-result ${isFake ? 'fake' : ''}" aria-label="${escapeHTML(title)} result">
-          <div class="model-result-head"><h3>${escapeHTML(title)}: ${escapeHTML(state.label)}</h3><span class="model-estimate">${percent}%</span></div>
-          <p>Model estimate for ${escapeHTML(positiveLabel)} · ${100 - percent}% for ${escapeHTML(negativeLabel)}</p>
-          <div class="meter" role="meter" aria-label="${escapeHTML(title)} estimate for ${escapeHTML(positiveLabel)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><div class="meter-fill" style="width:${percent}%"></div></div>
+          <div class="model-result-head"><h3>${escapeHTML(title)}: ${escapeHTML(state.label)}</h3><span class="model-estimate">${percent}/100</span></div>
+          <p>Score for ${escapeHTML(positiveLabel)} · lower scores indicate a stronger match with ${escapeHTML(negativeLabel)} examples.</p>
+          <div class="meter" role="meter" aria-label="${escapeHTML(title)} model score for ${escapeHTML(positiveLabel)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><div class="meter-fill" style="width:${percent}%"></div></div>
           <p class="model-evidence"><strong>Terms that influenced it:</strong> ${evidence.length ? `<span class="signal-list">${evidence.join('')}</span>` : 'No strong token matches from the training vocabulary.'}</p>
-          <p class="model-metrics">Holdout accuracy: ${(report.accuracy * 100).toFixed(1)}% across ${report.holdout_rows.toLocaleString()} held-out ${metricName} headlines from the supplied data.</p>
+          <div class="metrics-grid" aria-label="Holdout evaluation metrics">
+            <div class="metric"><strong>${(report.accuracy * 100).toFixed(1)}%</strong><span>Accuracy</span></div>
+            <div class="metric"><strong>${(report.balanced_accuracy * 100).toFixed(1)}%</strong><span>Balanced acc.</span></div>
+            <div class="metric"><strong>${(report.precision_positive_class * 100).toFixed(1)}%</strong><span>Precision</span></div>
+            <div class="metric"><strong>${(report.recall_positive_class * 100).toFixed(1)}%</strong><span>Recall</span></div>
+            <div class="metric"><strong>${(report.macro_f1 * 100).toFixed(1)}%</strong><span>Macro F1</span></div>
+          </div>
+          <p class="model-metrics">Holdout set: ${report.holdout_rows.toLocaleString()} ${metricName} headlines · not a measure of real-world fact-checking accuracy.</p>
         </section>`;
     }
 
