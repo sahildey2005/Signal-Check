@@ -50,7 +50,9 @@ The optimized trainer keeps the existing browser model fields. It makes two feat
 - Evidence cues show influential words, phrases, and headline-style features.
 - Holdout evaluation metrics and confusion matrices are displayed for both models.
 - Copy results lets users copy a short summary of the current analysis.
-- A compact “Was this check useful?” prompt stores anonymous Yes/No usefulness counts in the current browser's local storage. It does not collect the headline or retrain/change the classifiers; shared learning requires a backend and labelled clickbait/non-clickbait examples.
+- A compact “Was this check useful?” prompt stores Yes/No usefulness counts in the current browser.
+- A separate, cautious browser-local self-learning memory stores feature patterns from very high-confidence clickbait predictions (92% or higher). Once at least three similar remembered examples exist, those patterns make a small adjustment to later clickbait scores. It stores feature tokens rather than original headlines, keeps at most 200 examples, and does not upload data or alter the original `models.json` model.
+- This is experimental self-training, not verified learning: the system uses its own predictions as provisional labels, so an incorrect high-confidence prediction can reinforce a mistake. Proper supervised improvement still requires reliable clickbait/non-clickbait labels.
 - The project guide explains the difference between clickbait and misinformation, the training pipeline, technologies, and limitations.
 - Related coverage and fact-check search links help users continue checking a claim.
 
