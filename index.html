@@ -123,8 +123,9 @@
     .credibility svg { width: 19px; height: 19px; margin-top: 1px; color: var(--orange); }
     .credibility strong { display: block; color: #783f27; font-size: 11px; }
     .credibility p { margin: 3px 0 0; color: #825c4a; font-size: 10px; }
-    .coverage { margin-top: 18px; }
-    .coverage-links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .coverage { margin-top: 20px; padding-top: 15px; border-top: 1px solid #edf0e9; }
+    .coverage h4 { margin:0 0 9px; color:#728078; font-size:9px; letter-spacing:.1em; text-transform:uppercase; }
+    .coverage-links { display: grid; grid-template-columns: 1fr; gap: 7px; }
     .coverage-link { min-height: 55px; display: flex; align-items: center; justify-content: space-between; gap: 7px; padding: 9px 10px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 10px; font-size: 10px; font-weight: 700; text-decoration: none; transition: border-color .15s, transform .15s; }
     .coverage-link:hover { border-color: #8cae9b; transform: translateY(-1px); }
     .coverage-link svg { width: 13px; height: 13px; flex: 0 0 auto; color: var(--green); }
@@ -244,6 +245,11 @@
             <button id="neutral-sample" type="button">Try a neutral example</button>
             <button id="reset" type="button">Clear and reset</button>
           </div>
+          <div class="coverage" id="coverage-tools" hidden>
+            <h4>Explore related coverage</h4>
+            <div class="coverage-links" id="coverage-links"></div>
+          </div>
+          <div class="useful-feedback" id="useful-feedback" hidden aria-live="polite"><span>Was this check useful?</span><button type="button" data-useful="yes">Yes</button><button type="button" data-useful="no">No</button></div>
           <p class="privacy-note"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5 4 5v4.3c0 3.6 2.4 6.6 6 8.2 3.6-1.6 6-4.6 6-8.2V5l-6-2.5Z" stroke="currentColor" stroke-width="1.5"/><path d="m7.3 10 1.7 1.7 3.8-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Your headline stays in this browser. Search terms are shared with a search provider only if you open a coverage link.</span></p>
           <p class="model-status" id="model-status" role="status">Loading the trained headline models…</p>
         </section>
@@ -331,6 +337,10 @@
       latestResultText = '';
       headlineInput.dispatchEvent(new Event('input'));
       headlineInput.removeAttribute('aria-invalid');
+      const coverageTools = document.getElementById('coverage-tools');
+      const feedbackTools = document.getElementById('useful-feedback');
+      coverageTools.hidden = true;
+      feedbackTools.hidden = true;
       results.innerHTML = `<div class="empty-state"><div class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="10.8" cy="10.8" r="6.8" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 4.5 4.5M8.2 10.8h5.2m-2.6-2.6v5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div><h3>Clarity starts with a closer look.</h3><p>Enter a headline to compare it with examples in the supplied datasets and find other coverage of the same topic.</p></div>`;
       headlineInput.focus();
     }
@@ -382,6 +392,9 @@
       const fakeReal = predict(headline, trainedModels.fake_real);
       const searchQuery = makeSearchQuery(headline);
       const links = makeCoverageLinks(searchQuery);
+      document.getElementById('coverage-links').innerHTML = links;
+      document.getElementById('coverage-tools').hidden = false;
+      document.getElementById('useful-feedback').hidden = false;
       const clickbaitReport = trainedModels.report.clickbait_holdout;
       const fakeReport = trainedModels.report.fake_real_holdout;
       const clickbaitState = describePrediction(clickbait.probability, 'clickbait', 'non-clickbait', 'clickbait');
@@ -434,8 +447,6 @@
           <div class="score-explainer"><strong>How to read these scores</strong><p>Each score is the model's output for its positive training label, shown on a 0–100 scale. It is not the probability that a real-world story is true or false. A higher score means the headline more strongly matches patterns learned from that dataset.</p></div>
           <div class="model-source-note">The fake/true model learns labels inherited from the supplied Fake.csv and True.csv files. It does not independently verify facts, sources, dates, or article evidence.</div>
           <details class="model-source-note"><summary>About the models and evaluation</summary><p>Both classifiers use Multinomial Naive Bayes with unigram, bigram, and headline-style features. Headlines are deduplicated and split into 70% training, 15% calibration, and 15% holdout data (seed 42). The holdout metrics below describe only those supplied datasets.</p><p>${escapeHTML(trainedModels.report.split || '')}</p></details>
-          <div class="coverage"><h4>Explore related coverage</h4><div class="coverage-links">${links}</div></div>
-          <div class="useful-feedback" id="useful-feedback" aria-live="polite"><span>Was this check useful?</span><button type="button" data-useful="yes">Yes</button><button type="button" data-useful="no">No</button></div>
         </div>`;
       document.getElementById('copy-result').addEventListener('click', copyResults);
       document.querySelectorAll('#useful-feedback button').forEach(button => {
