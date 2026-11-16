@@ -151,6 +151,11 @@
     .model-result .model-metrics { line-height: 1.5; }
     .copy-result-button { padding: 7px 11px; color: var(--green); background: #f3f7f1; border: 1px solid #cbd9cc; border-radius: 9px; font-size: 10px; font-weight: 750; cursor: pointer; }
     .copy-result-button:hover { background: #e8f1e8; }
+    .useful-feedback { display:flex; align-items:center; justify-content:flex-end; gap:7px; margin-top:13px; color:#7a867f; font-size:10px; }
+    .useful-feedback span { margin-right:3px; }
+    .useful-feedback button { padding:4px 9px; color:#607168; background:transparent; border:1px solid var(--line); border-radius:7px; font-size:10px; cursor:pointer; }
+    .useful-feedback button:hover, .useful-feedback button.selected { color:var(--green); background:#edf6ee; border-color:#b8c8bc; }
+    .useful-feedback button:disabled { cursor:default; opacity:.7; }
     .info-section { margin: 0 0 30px; padding: 25px 28px; background: var(--card); border: 1px solid rgba(220,226,217,.92); border-radius: 18px; }
     .info-section h2 { margin: 0 0 10px; font-family: Georgia, "Times New Roman", serif; font-size: 24px; font-weight: 500; }
     .info-section h3 { margin: 18px 0 5px; font-size: 13px; }
@@ -430,8 +435,26 @@
           <div class="model-source-note">The fake/true model learns labels inherited from the supplied Fake.csv and True.csv files. It does not independently verify facts, sources, dates, or article evidence.</div>
           <details class="model-source-note"><summary>About the models and evaluation</summary><p>Both classifiers use Multinomial Naive Bayes with unigram, bigram, and headline-style features. Headlines are deduplicated and split into 70% training, 15% calibration, and 15% holdout data (seed 42). The holdout metrics below describe only those supplied datasets.</p><p>${escapeHTML(trainedModels.report.split || '')}</p></details>
           <div class="coverage"><h4>Explore related coverage</h4><div class="coverage-links">${links}</div></div>
+          <div class="useful-feedback" id="useful-feedback" aria-live="polite"><span>Was this check useful?</span><button type="button" data-useful="yes">Yes</button><button type="button" data-useful="no">No</button></div>
         </div>`;
       document.getElementById('copy-result').addEventListener('click', copyResults);
+      document.querySelectorAll('#useful-feedback button').forEach(button => {
+        button.addEventListener('click', () => saveUsefulness(button.dataset.useful));
+      });
+    }
+
+    function saveUsefulness(answer) {
+      const feedback = document.getElementById('useful-feedback');
+      if (!feedback || !['yes', 'no'].includes(answer)) return;
+      try {
+        const key = 'signalCheckUsefulness';
+        const totals = JSON.parse(localStorage.getItem(key) || '{"yes":0,"no":0}');
+        totals[answer] = (Number(totals[answer]) || 0) + 1;
+        localStorage.setItem(key, JSON.stringify(totals));
+        feedback.innerHTML = '<span>Thanks — your response was saved on this browser.</span>';
+      } catch (error) {
+        feedback.innerHTML = '<span>Thanks for your response.</span>';
+      }
     }
 
     async function copyResults() {
