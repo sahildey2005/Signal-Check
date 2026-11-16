@@ -140,6 +140,22 @@
     .metric strong { display: block; color: #355d4c; font-size: 10px; }
     .metric span { display: block; margin-top: 2px; color: #7b8980; font-size: 8px; }
     .model-result .model-metrics { line-height: 1.5; }
+    .copy-result-button { padding: 7px 11px; color: var(--green); background: #f3f7f1; border: 1px solid #cbd9cc; border-radius: 9px; font-size: 10px; font-weight: 750; cursor: pointer; }
+    .copy-result-button:hover { background: #e8f1e8; }
+    .matrix-wrap { margin-top: 10px; overflow-x: auto; }
+    .matrix-title { margin: 0 0 6px; color: #728078; font-size: 9px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+    .confusion-matrix { width: 100%; border-collapse: collapse; font-size: 9px; text-align: center; }
+    .confusion-matrix th, .confusion-matrix td { padding: 6px 5px; border: 1px solid #e3e9e1; }
+    .confusion-matrix th { color: #65756a; background: #f1f4ee; font-weight: 700; }
+    .confusion-matrix td { color: #355d4c; background: #fff; font-weight: 750; }
+    .info-section { margin: 0 0 30px; padding: 25px 28px; background: var(--card); border: 1px solid rgba(220,226,217,.92); border-radius: 18px; }
+    .info-section h2 { margin: 0 0 10px; font-family: Georgia, "Times New Roman", serif; font-size: 24px; font-weight: 500; }
+    .info-section h3 { margin: 18px 0 5px; font-size: 13px; }
+    .info-section p, .info-section li { color: var(--muted); font-size: 12px; }
+    .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+    .info-card { padding: 15px; background: #f7f8f3; border-radius: 12px; }
+    .info-card h3 { margin-top: 0; }
+    @media (max-width: 540px) { .info-grid { grid-template-columns: 1fr; } }
     @media (max-width: 540px) { .metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     .footer { display: flex; justify-content: space-between; gap: 20px; padding: 2px 0 26px; color: #829087; font-size: 10px; }
     .footer strong { color: #53675b; font-weight: 700; }
@@ -235,6 +251,39 @@
           </div>
         </section>
       </section>
+
+      <section class="info-section" id="project-guide" aria-labelledby="project-guide-title">
+        <h2 id="project-guide-title">Understand the result</h2>
+        <p>Signal Check runs two independent headline classifiers. Their outputs answer different questions and should never be treated as a single verdict.</p>
+        <div class="info-grid">
+          <article class="info-card">
+            <h3>Clickbait is about presentation</h3>
+            <p>Clickbait wording is designed to attract attention or encourage a click. A headline can be clickbait and still describe a true event. A neutral-sounding headline can also contain a false claim.</p>
+          </article>
+          <article class="info-card">
+            <h3>Fake/true labels are dataset labels</h3>
+            <p>The second model compares a headline with examples labelled fake or true in the supplied training files. These inherited labels are not an independent fact-check of the headline you enter.</p>
+          </article>
+        </div>
+        <h3>How the machine-learning pipeline works</h3>
+        <ol>
+          <li>Training data is read from the supplied CSV files.</li>
+          <li>Headlines are cleaned and converted into word, two-word phrase, and writing-style features.</li>
+          <li>Two Multinomial Naive Bayes classifiers learn patterns from their own labelled datasets.</li>
+          <li>The trained weights and evaluation results are saved in <code>models.json</code>.</li>
+          <li>This browser app loads those saved values and predicts on the headline you enter. It does not retrain the models in your browser.</li>
+        </ol>
+        <h3>Technology used</h3>
+        <p>Python standard library for data preparation and model training; HTML, CSS and JavaScript for the browser interface; JSON for storing the trained model parameters.</p>
+        <h3>Limitations and responsible use</h3>
+        <ul>
+          <li>A headline alone is not enough to establish whether an article or claim is true.</li>
+          <li>The model can learn topic, publisher, time-period, and dataset-label patterns rather than factual accuracy.</li>
+          <li>Holdout metrics describe performance on a reserved portion of the supplied datasets. They do not guarantee performance on current news or unfamiliar sources.</li>
+          <li>Model scores are estimates of similarity to learned labels, not verified real-world probabilities.</li>
+          <li>Always read the full article, check its date and original sources, and compare independent reporting before sharing a claim.</li>
+        </ul>
+      </section>
     </main>
 
     <footer class="footer"><span><strong>Signal Check</strong> · A learning project in media literacy</span><span>Dataset predictions are not independent fact-checks.</span></footer>
@@ -252,6 +301,7 @@
     const neutralSampleButton = document.getElementById('neutral-sample');
     const resetButton = document.getElementById('reset');
     let trainedModels = null;
+    let latestResultText = '';
 
     headlineInput.addEventListener('input', () => {
       charCount.textContent = `${headlineInput.value.length} / 280`;
@@ -270,6 +320,7 @@
 
     function resetChecker() {
       headlineInput.value = '';
+      latestResultText = '';
       headlineInput.dispatchEvent(new Event('input'));
       headlineInput.removeAttribute('aria-invalid');
       results.innerHTML = `<div class="empty-state"><div class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="10.8" cy="10.8" r="6.8" stroke="currentColor" stroke-width="1.7"/><path d="m16 16 4.5 4.5M8.2 10.8h5.2m-2.6-2.6v5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div><h3>Clarity starts with a closer look.</h3><p>Enter a headline to compare it with examples in the supplied datasets and find other coverage of the same topic.</p></div>`;
@@ -328,10 +379,20 @@
       const clickbaitState = describePrediction(clickbait.probability, 'clickbait', 'non-clickbait', 'clickbait');
       const fakeState = describePrediction(fakeReal.probability, 'fake-labeled examples', 'true-labeled examples', 'fake-label');
 
+      latestResultText = [
+        'SIGNAL CHECK — HEADLINE ANALYSIS',
+        'Headline: ' + headline,
+        'Clickbait model: ' + Math.round(clickbait.probability * 100) + '/100 (score for clickbait label)',
+        'Fake/real dataset model: ' + Math.round(fakeReal.probability * 100) + '/100 (score for fake-labelled examples)',
+        'Note: These are dataset-pattern estimates, not independent fact-checks or real-world probabilities.',
+        'Compare full articles and independent sources before drawing a conclusion.'
+      ].join('\\n');
+
       results.innerHTML = `
         <div class="result-content">
           <div class="result-summary">
             <h3>Two separate model checks</h3>
+            <button class="copy-result-button" id="copy-result" type="button">Copy results</button>
           </div>
           ${renderModelResult({
             title: 'Clickbait model',
@@ -359,6 +420,32 @@
           <details class="model-source-note"><summary>About the models and evaluation</summary><p>Both classifiers use Multinomial Naive Bayes with unigram, bigram, and headline-style features. Headlines are deduplicated and split into 70% training, 15% calibration, and 15% holdout data (seed 42). The holdout metrics below describe only those supplied datasets.</p><p>${escapeHTML(trainedModels.report.split || '')}</p></details>
           <div class="coverage"><h4>Explore related coverage</h4><div class="coverage-links">${links}</div></div>
         </div>`;
+      document.getElementById('copy-result').addEventListener('click', copyResults);
+    }
+
+    async function copyResults() {
+      if (!latestResultText) return;
+      const button = document.getElementById('copy-result');
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(latestResultText);
+        } else {
+          const helper = document.createElement('textarea');
+          helper.value = latestResultText;
+          helper.setAttribute('readonly', '');
+          helper.style.position = 'absolute';
+          helper.style.left = '-9999px';
+          document.body.appendChild(helper);
+          helper.select();
+          const copied = document.execCommand('copy');
+          helper.remove();
+          if (!copied) throw new Error('Copy command was not successful');
+        }
+        button.textContent = 'Copied!';
+        window.setTimeout(() => { if (button.isConnected) button.textContent = 'Copy results'; }, 1600);
+      } catch (error) {
+        button.textContent = 'Copy unavailable';
+      }
     }
 
     function predict(text, model) {
@@ -450,6 +537,16 @@
             <div class="metric"><strong>${(report.macro_f1 * 100).toFixed(1)}%</strong><span>Macro F1</span></div>
           </div>
           <p class="model-metrics">Holdout set: ${report.holdout_rows.toLocaleString()} ${metricName} headlines · not a measure of real-world fact-checking accuracy.</p>
+          <div class="matrix-wrap">
+            <p class="matrix-title">Confusion matrix · actual rows / predicted columns</p>
+            <table class="confusion-matrix" aria-label="Confusion matrix for holdout evaluation">
+              <thead><tr><th>Actual / Predicted</th><th>${escapeHTML(positiveCaption)}</th><th>${escapeHTML(negativeCaption)}</th></tr></thead>
+              <tbody>
+                <tr><th>${escapeHTML(positiveCaption)}</th><td>${Number(report.true_positive).toLocaleString()} · TP</td><td>${Number(report.false_negative).toLocaleString()} · FN</td></tr>
+                <tr><th>${escapeHTML(negativeCaption)}</th><td>${Number(report.false_positive).toLocaleString()} · FP</td><td>${Number(report.true_negative).toLocaleString()} · TN</td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>`;
     }
 
