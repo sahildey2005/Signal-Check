@@ -12,6 +12,7 @@ import json
 import math
 import random
 import re
+import sqlite3
 import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -128,6 +129,49 @@ def read_fake_real(fake_path: Path, true_path: Path) -> tuple[list[tuple[str, in
         "conflicting_headlines_removed": len(conflicts),
     }
 
+
+
+def read_approved_feedback(db_path: Path) -> tuple[list[tuple[str, int]], list[tuple[str, int]], dict[str, int]]:
+    """Read only manually approved labels from the local feedback database."""
+    if not db_path.is_file():
+        return [], [], {"approved_submissions": 0, "clickbait_labels": 0, "fake_real_labels": 0}
+    clickbait_rows: list[tuple[str, int]] = []
+    fake_real_rows: list[tuple[str, int]] = []
+    with sqlite3.connect(db_path) as db:
+        rows = db.execute(
+            "SELECT headline, clickbait_label, fake_real_label FROM feedback WHERE status='approved' ORDER BY id"
+        ).fetchall()
+    for headline, clickbait_label, fake_real_label in rows:
+        title = clean_text(str(headline or ""))
+        if not normalize_title(title):
+            continue
+        if clickbait_label in (0, 1):
+            clickbait_rows.append((title, int(clickbait_label)))
+        if fake_real_label in (0, 1):
+            fake_real_rows.append((title, int(fake_real_label)))
+    return clickbait_rows, fake_real_rows, {
+        "approved_submissions": len(rows),
+        "clickbait_labels": len(clickbait_rows),
+        "fake_real_labels": len(fake_real_rows),
+    }
+
+
+def merge_records(base: list[tuple[str, int]], additions: list[tuple[str, int]]) -> tuple[list[tuple[str, int]], dict[str, int]]:
+    """Merge labels, dropping duplicate titles and any conflicting labels."""
+    grouped: dict[str, set[int]] = defaultdict(set)
+    originals: dict[str, str] = {}
+    for title, label in [*base, *additions]:
+        normalized = normalize_title(title)
+        if normalized:
+            grouped[normalized].add(int(label))
+            originals.setdefault(normalized, clean_text(title))
+    conflicts = {title for title, labels in grouped.items() if len(labels) > 1}
+    merged = [(originals[title], next(iter(labels))) for title, labels in grouped.items() if title not in conflicts]
+    return merged, {
+        "merged_unique_headlines": len(merged),
+        "conflicting_headlines_removed": len(conflicts),
+        "feedback_rows_received": len(additions),
+    }
 
 def split_records(records: list[tuple[str, int]], seed: int = SEED) -> tuple[list[tuple[str, int]], list[tuple[str, int]], list[tuple[str, int]]]:
     groups: dict[int, list[str]] = defaultdict(list)
@@ -342,6 +386,7 @@ def main() -> None:
     parser.add_argument("--fake", type=Path, default=DEFAULT_FAKE)
     parser.add_argument("--true", type=Path, default=DEFAULT_TRUE)
     parser.add_argument("--output", type=Path, default=Path(__file__).with_name("models.json"))
+    parser.add_argument("--feedback-db", type=Path, default=None, help="Optional SQLite database; only approved feedback is included")
     args = parser.parse_args()
 
     for path in (args.clickbait, args.fake, args.true):
@@ -350,6 +395,13 @@ def main() -> None:
 
     clickbait_records, clickbait_source = read_clickbait(args.clickbait)
     fake_real_records, fake_real_source = read_fake_real(args.fake, args.true)
+    feedback_report = {"approved_submissions": 0, "clickbait_labels": 0, "fake_real_labels": 0}
+    if args.feedback_db:
+        feedback_clickbait, feedback_fake_real, feedback_report = read_approved_feedback(args.feedback_db)
+        clickbait_records, clickbait_feedback_merge = merge_records(clickbait_records, feedback_clickbait)
+        fake_real_records, fake_feedback_merge = merge_records(fake_real_records, feedback_fake_real)
+        clickbait_source["feedback_merge"] = clickbait_feedback_merge
+        fake_real_source["feedback_merge"] = fake_feedback_merge
     clickbait_model, clickbait_report = build_model(clickbait_records, 1, "clickbait", "not clickbait")
     fake_model, fake_report = build_model(fake_real_records, 1, "fake-labeled", "true-labeled")
 
@@ -364,6 +416,7 @@ def main() -> None:
             "clickbait_holdout": clickbait_report,
             "fake_real_source": fake_real_source,
             "fake_real_holdout": fake_report,
+            "approved_feedback": feedback_report,
             "notes": [
                 "The fake/real labels come from the supplied filenames and are not independent fact-checks.",
                 "Models learn patterns in these datasets and may reflect their age, topics, publishers, and labeling choices.",
@@ -374,7 +427,7 @@ def main() -> None:
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(output, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(json.dumps({"output": str(args.output), "clickbait": clickbait_report, "fake_real": fake_report}, indent=2))
+    print(json.dumps({"output": str(args.output), "approved_feedback": feedback_report, "clickbait": clickbait_report, "fake_real": fake_report}, indent=2))
 
 
 if __name__ == "__main__":

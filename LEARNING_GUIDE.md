@@ -257,3 +257,20 @@ Rebuild one part at a time rather than typing the entire app at once:
 8. Add evidence terms, coverage links, privacy copy, and the local launcher.
 
 After each step, compare your file with the complete code linked at the start of this guide.
+
+
+## Step 13: Collect reviewed feedback and retrain
+
+The result panel now has two optional label selectors. A reviewer can label clickbait vs. non-clickbait independently from fake-labelled vs. true-labelled dataset patterns. For the fake/true selector, provide a reliable evidence URL. The browser sends the headline, selected labels, model scores, and evidence URL to the local feedback API.
+
+The API stores submissions as pending in `feedback.sqlite3`. This is important: a visitor's click is not automatically treated as truth. The project owner reviews the queue with `python manage_feedback.py list`, then approves a verified submission with `python manage_feedback.py approve ID --confirm-reviewed` or rejects it. Once at least 10 approved labels exist for each model, approving another submission automatically builds/overwrites `models_candidate.json` if the original CSV files are present. The candidate is not published or promoted automatically.
+
+To retrain using only approved feedback, keep the three original CSV files in `data/` and run:
+
+```text
+python train_models.py --feedback-db feedback.sqlite3 --output models_candidate.json
+```
+
+This retrains both Naive Bayes classifiers and writes a candidate model, leaving the current `models.json` untouched. Review the new metrics and test the candidate on separate fresh examples before replacing the live model. The feedback queue is supervised learning; the existing browser-local high-confidence pattern memory is a separate experimental feature and is not used by this retraining command.
+
+The included server is local development only. GitHub Pages is static hosting, so remote visitors cannot submit feedback until a separate backend is deployed and its HTTPS URL is set in `config.js`.

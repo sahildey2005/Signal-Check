@@ -1,0 +1,17 @@
+# Local source datasets (keep licensed/source CSVs out of the public repo)
+data/*.csv
+
+# Feedback submissions and local SQLite database
+feedback.sqlite3
+feedback.sqlite3-shm
+feedback.sqlite3-wal
+
+# Python cache / environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Candidate model builds; review before replacing the published model
+models_candidate.json
+models_backup_*.json
