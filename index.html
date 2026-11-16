@@ -100,6 +100,8 @@
     .quick-result-row:first-of-type { border-top: 0; }
     .quick-result-row span { color: #607168; font-size: 11px; }
     .quick-result-row strong { color: #245a43; font-size: 14px; text-align: right; }
+    .quick-result-row.clickbait-verdict { padding: 12px 0; }
+    .quick-result-row.clickbait-verdict strong { color: #0e4d42; font-size: 20px; letter-spacing: .02em; }
     .quick-result-note { margin: 7px 0 0; color: #607168; font-size: 10px; }
     .result-summary { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; }
     .result-summary h3 { margin: 0; font-size: 15px; line-height: 1.4; }
@@ -383,7 +385,7 @@
       latestResultText = [
         'SIGNAL CHECK — HEADLINE ANALYSIS',
         'Headline: ' + headline,
-        'Quick clickbait result: ' + (clickbait.probability >= 0.65 ? 'Likely Clickbait' : clickbait.probability <= 0.35 ? 'Likely Not Clickbait' : 'Unclear — mixed signals'),
+        'Clickbait verdict: ' + (clickbait.probability >= 0.5 ? 'CLICKBAIT' : 'NOT CLICKBAIT'),
         'Quick fake-news pattern result: ' + (fakeReal.probability >= 0.65 ? 'More like fake-labelled examples' : fakeReal.probability <= 0.35 ? 'More like true-labelled examples' : 'Unclear — mixed signals'),
         'Clickbait model: ' + Math.round(clickbait.probability * 100) + '/100 (score for clickbait label)',
         'Fake/real dataset model: ' + Math.round(fakeReal.probability * 100) + '/100 (score for fake-labelled examples)',
@@ -395,9 +397,9 @@
         <div class="result-content">
           <section class="quick-result" aria-label="Simple headline results">
             <h3>Quick result</h3>
-            <div class="quick-result-row"><span>Clickbait check</span><strong>${clickbait.probability >= 0.65 ? 'Likely Clickbait' : clickbait.probability <= 0.35 ? 'Likely Not Clickbait' : 'Unclear — mixed signals'}</strong></div>
+            <div class="quick-result-row clickbait-verdict"><span>Clickbait verdict</span><strong>${clickbait.probability >= 0.5 ? 'CLICKBAIT' : 'NOT CLICKBAIT'}</strong></div>
             <div class="quick-result-row"><span>Fake-news pattern check</span><strong>${fakeReal.probability >= 0.65 ? 'More like fake-labelled examples' : fakeReal.probability <= 0.35 ? 'More like true-labelled examples' : 'Unclear — mixed signals'}</strong></div>
-            <p class="quick-result-note">These are quick model estimates. The fake-news pattern check does not verify whether a story is true or false.</p>
+            <p class="quick-result-note">The clickbait verdict uses a 50% model-score cutoff. The separate fake-news pattern check only compares learned dataset patterns; it does not verify whether a story is true or false.</p>
           </section>
           <div class="result-summary">
             <h3>Two separate model checks</h3>
