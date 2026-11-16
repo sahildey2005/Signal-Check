@@ -643,6 +643,33 @@
           return `<span class="signal-chip">“${escapeHTML(phrase)}” → ${escapeHTML(direction)}</span>`;
         });
       const metricName = isFake ? 'fake/real' : 'clickbait';
+      // Older models.json files may not include derived metrics. Recalculate
+      // them from the saved holdout confusion counts instead of rendering NaN.
+      const count = key => Number(report?.[key]);
+      const tp = count('true_positive');
+      const tn = count('true_negative');
+      const fp = count('false_positive');
+      const fn = count('false_negative');
+      const hasConfusionCounts = [tp, tn, fp, fn].every(Number.isFinite);
+      const ratio = (numerator, denominator) => denominator > 0 ? numerator / denominator : null;
+      const precisionValue = Number.isFinite(Number(report?.precision_positive_class))
+        ? Number(report.precision_positive_class)
+        : (hasConfusionCounts ? ratio(tp, tp + fp) : null);
+      const recallValue = Number.isFinite(Number(report?.recall_positive_class))
+        ? Number(report.recall_positive_class)
+        : (hasConfusionCounts ? ratio(tp, tp + fn) : null);
+      const specificityValue = hasConfusionCounts ? ratio(tn, tn + fp) : null;
+      const negativePrecision = hasConfusionCounts ? ratio(tn, tn + fn) : null;
+      const f1 = (p, r) => p !== null && r !== null && p + r > 0 ? 2 * p * r / (p + r) : null;
+      const balancedFallback = recallValue !== null && specificityValue !== null
+        ? (recallValue + specificityValue) / 2 : null;
+      const macroFallback = f1(precisionValue, recallValue) !== null && f1(negativePrecision, specificityValue) !== null
+        ? (f1(precisionValue, recallValue) + f1(negativePrecision, specificityValue)) / 2 : null;
+      const metricText = (key, fallback = null) => {
+        const stored = Number(report?.[key]);
+        const value = Number.isFinite(stored) ? stored : fallback;
+        return Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : 'N/A';
+      };
       return `
         <section class="model-result ${isFake ? 'fake' : ''}" aria-label="${escapeHTML(title)} result">
           <div class="model-result-head"><h3>${escapeHTML(title)}: ${escapeHTML(state.label)}</h3><span class="model-estimate">${percent}/100</span></div>
@@ -650,11 +677,11 @@
           <div class="meter" role="meter" aria-label="${escapeHTML(title)} model score for ${escapeHTML(positiveLabel)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><div class="meter-fill" style="width:${percent}%"></div></div>
           <p class="model-evidence"><strong>Terms that influenced it:</strong> ${evidence.length ? `<span class="signal-list">${evidence.join('')}</span>` : 'No strong token matches from the training vocabulary.'}</p>
           <div class="metrics-grid" aria-label="Holdout evaluation metrics">
-            <div class="metric"><strong>${(report.accuracy * 100).toFixed(1)}%</strong><span>Accuracy</span></div>
-            <div class="metric"><strong>${(report.balanced_accuracy * 100).toFixed(1)}%</strong><span>Balanced acc.</span></div>
-            <div class="metric"><strong>${(report.precision_positive_class * 100).toFixed(1)}%</strong><span>Precision</span></div>
-            <div class="metric"><strong>${(report.recall_positive_class * 100).toFixed(1)}%</strong><span>Recall</span></div>
-            <div class="metric"><strong>${(report.macro_f1 * 100).toFixed(1)}%</strong><span>Macro F1</span></div>
+            <div class="metric"><strong>${metricText('accuracy')}</strong><span>Accuracy</span></div>
+            <div class="metric"><strong>${metricText('balanced_accuracy', balancedFallback)}</strong><span>Balanced acc.</span></div>
+            <div class="metric"><strong>${metricText('precision_positive_class', precisionValue)}</strong><span>Precision</span></div>
+            <div class="metric"><strong>${metricText('recall_positive_class', recallValue)}</strong><span>Recall</span></div>
+            <div class="metric"><strong>${metricText('macro_f1', macroFallback)}</strong><span>Macro F1</span></div>
           </div>
           <p class="model-metrics">Holdout set: ${report.holdout_rows.toLocaleString()} ${metricName} headlines · not a measure of real-world fact-checking accuracy.</p>
         </section>`;
