@@ -256,7 +256,7 @@
             <h4>Explore related coverage</h4>
             <div class="coverage-links" id="coverage-links"></div>
           </div>
-          <p class="privacy-note"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5 4 5v4.3c0 3.6 2.4 6.6 6 8.2 3.6-1.6 6-4.6 6-8.2V5l-6-2.5Z" stroke="currentColor" stroke-width="1.5"/><path d="m7.3 10 1.7 1.7 3.8-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Headlines stay in this browser unless you choose to submit a labelled feedback example. Submitted examples are stored locally for review; search terms are shared only if you open a coverage link.</span></p>
+          <p class="privacy-note"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5 4 5v4.3c0 3.6 2.4 6.6 6 8.2 3.6-1.6 6-4.6 6-8.2V5l-6-2.5Z" stroke="currentColor" stroke-width="1.5"/><path d="m7.3 10 1.7 1.7 3.8-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Headlines are analysed in this browser. If you submit labelled feedback, it is sent to the feedback server configured for this site for review. Search terms are shared only if you open a coverage link.</span></p>
           <p class="model-status" id="model-status" role="status">Loading the trained headline models…</p>
         </section>
 
@@ -416,7 +416,7 @@
         'SIGNAL CHECK — HEADLINE ANALYSIS',
         'Headline: ' + headline,
         'Clickbait verdict: ' + (clickbait.probability >= 0.5 ? 'CLICKBAIT' : 'NOT CLICKBAIT'),
-        'Quick fake-news pattern result: ' + (fakeReal.probability >= 0.65 ? 'More like fake-labelled examples' : fakeReal.probability <= 0.35 ? 'More like true-labelled examples' : 'Unclear — mixed signals'),
+        'Quick fake-news pattern result: ' + (fakeReal.probability >= 0.65 ? 'More similar to fake-labelled examples' : fakeReal.probability <= 0.35 ? 'More similar to true-labelled examples' : 'Unclear — mixed signals'),
         'Clickbait model: ' + Math.round(clickbait.probability * 100) + '/100 (score for clickbait label)',
         'Fake/real dataset model: ' + Math.round(fakeReal.probability * 100) + '/100 (score for fake-labelled examples)',
         'Note: These are dataset-pattern estimates, not independent fact-checks or real-world probabilities.',
@@ -428,8 +428,8 @@
           <section class="quick-result" aria-label="Simple headline results">
             <h3>Quick result</h3>
             <div class="quick-result-row clickbait-verdict"><span>Clickbait verdict</span><strong>${clickbait.probability >= 0.5 ? 'CLICKBAIT' : 'NOT CLICKBAIT'}</strong></div>
-            <div class="quick-result-row"><span>Fake-news pattern check</span><strong>${fakeReal.probability >= 0.65 ? 'More like fake-labelled examples' : fakeReal.probability <= 0.35 ? 'More like true-labelled examples' : 'Unclear — mixed signals'}</strong></div>
-            <p class="quick-result-note">The clickbait verdict uses a 50% model-score cutoff. The separate fake-news pattern check only compares learned dataset patterns; it does not verify whether a story is true or false. ${clickbait.learned ? `Local pattern memory adjusted this clickbait score using ${clickbait.learnedExamples} similar stored examples (15% maximum influence).` : `Local pattern memory has ${clickbait.memoryExamples ?? 0} stored examples; ${clickbait.learnedExamples ?? 0} matched this headline closely enough. At least 3 similar examples are required before it adjusts the score.`}</p>
+            <div class="quick-result-row"><span>Fake/true dataset-pattern comparison</span><strong>${fakeReal.probability >= 0.65 ? 'More like fake-labelled examples' : fakeReal.probability <= 0.35 ? 'More like true-labelled examples' : 'Unclear — mixed signals'}</strong></div>
+            <p class="quick-result-note">The clickbait verdict uses a 50% model-score cutoff. The separate fake-news pattern check only compares learned dataset patterns; it does not verify whether a story is true or false. ${clickbait.learned ? `Local pattern memory adjusted this clickbait score using ${clickbait.learnedExamples} similar stored examples (15% maximum influence).` : `Local pattern memory has ${clickbait.memoryExamples ?? 0} stored ${clickbait.memoryExamples === 1 ? 'example' : 'examples'}; ${clickbait.learnedExamples ?? 0} matched this headline closely enough. At least 3 similar examples are required before it adjusts the score.`}</p>
           </section>
           <div class="result-summary">
             <h3>Two separate model checks</h3>
@@ -448,7 +448,7 @@
           ${renderModelResult({
             title: 'Fake/real dataset model',
             positiveLabel: 'fake-labeled examples',
-            negativeLabel: 'true-labeled examples',
+            negativeLabel: 'true-labeled',
             result: fakeReal,
             state: fakeState,
             report: fakeReport,
@@ -466,7 +466,7 @@
               <select id="feedback-clickbait"><option value="">Do not label this model</option><option value="1">Clickbait</option><option value="0">Not clickbait</option></select>
               <label for="feedback-fake-real">Reviewed dataset-pattern label</label>
               <select id="feedback-fake-real"><option value="">Do not label this model</option><option value="1">Fake-labelled pattern</option><option value="0">True-labelled pattern</option></select>
-              <label for="feedback-evidence">Evidence link (required for fake/true label)</label>
+              <label for="feedback-evidence">Evidence link (required when submitting a fake/true label)</label>
               <input id="feedback-evidence" type="url" maxlength="1000" placeholder="https://reliable-source.example/article">
             </div>
             <p class="feedback-caution">Only submit labels you have checked. For fake/true labels, use a reliable source that supports the article's factual claim. These labels still describe the training dataset's categories, not a perfect truth detector.</p>
@@ -753,7 +753,7 @@
           <div class="model-result-head"><h3>${escapeHTML(title)}: ${escapeHTML(state.label)}</h3><span class="model-estimate">${percent}/100</span></div>
           <p>Score for ${escapeHTML(positiveLabel)} · lower scores indicate a stronger match with ${escapeHTML(negativeLabel)} examples.</p>
           <div class="meter" role="meter" aria-label="${escapeHTML(title)} model score for ${escapeHTML(positiveLabel)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><div class="meter-fill" style="width:${percent}%"></div></div>
-          <p class="model-evidence"><strong>Terms that influenced it:</strong> ${evidence.length ? `<span class="signal-list">${evidence.join('')}</span>` : 'No strong token matches from the training vocabulary.'}</p>
+          <p class="model-evidence"><strong>Features that influenced this score:</strong> ${evidence.length ? `<span class="signal-list">${evidence.join('')}</span>` : 'No strong token matches from the training vocabulary.'}</p>
           <div class="metrics-grid" aria-label="Holdout evaluation metrics">
             <div class="metric"><strong>${metricText('accuracy')}</strong><span>Accuracy</span></div>
             <div class="metric"><strong>${metricText('balanced_accuracy', balancedFallback)}</strong><span>Balanced acc.</span></div>
