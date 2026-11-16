@@ -386,7 +386,7 @@
         'Fake/real dataset model: ' + Math.round(fakeReal.probability * 100) + '/100 (score for fake-labelled examples)',
         'Note: These are dataset-pattern estimates, not independent fact-checks or real-world probabilities.',
         'Compare full articles and independent sources before drawing a conclusion.'
-      ].join('\\n');
+      ].join(String.fromCharCode(10));
 
       results.innerHTML = `
         <div class="result-content">
