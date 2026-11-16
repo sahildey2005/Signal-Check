@@ -94,6 +94,13 @@
     .empty-state h3 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 21px; font-weight: 500; }
     .empty-state p { max-width: 300px; margin: 8px 0 0; color: var(--muted); font-size: 12px; }
     .result-content { padding-top: 19px; }
+    .quick-result { margin: 0 0 15px; padding: 15px 16px; background: #edf6ee; border: 1px solid #d7e8d8; border-radius: 13px; }
+    .quick-result h3 { margin: 0 0 9px; color: #315b49; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    .quick-result-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 0; border-top: 1px solid #dce9dc; }
+    .quick-result-row:first-of-type { border-top: 0; }
+    .quick-result-row span { color: #607168; font-size: 11px; }
+    .quick-result-row strong { color: #245a43; font-size: 14px; text-align: right; }
+    .quick-result-note { margin: 7px 0 0; color: #607168; font-size: 10px; }
     .result-summary { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; }
     .result-summary h3 { margin: 0; font-size: 15px; line-height: 1.4; }
     .status-pill { flex: 0 0 auto; padding: 5px 9px; color: #326550; background: #e8f3e8; border-radius: 999px; font-size: 10px; font-weight: 800; }
@@ -142,12 +149,6 @@
     .model-result .model-metrics { line-height: 1.5; }
     .copy-result-button { padding: 7px 11px; color: var(--green); background: #f3f7f1; border: 1px solid #cbd9cc; border-radius: 9px; font-size: 10px; font-weight: 750; cursor: pointer; }
     .copy-result-button:hover { background: #e8f1e8; }
-    .matrix-wrap { margin-top: 10px; overflow-x: auto; }
-    .matrix-title { margin: 0 0 6px; color: #728078; font-size: 9px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
-    .confusion-matrix { width: 100%; border-collapse: collapse; font-size: 9px; text-align: center; }
-    .confusion-matrix th, .confusion-matrix td { padding: 6px 5px; border: 1px solid #e3e9e1; }
-    .confusion-matrix th { color: #65756a; background: #f1f4ee; font-weight: 700; }
-    .confusion-matrix td { color: #355d4c; background: #fff; font-weight: 750; }
     .info-section { margin: 0 0 30px; padding: 25px 28px; background: var(--card); border: 1px solid rgba(220,226,217,.92); border-radius: 18px; }
     .info-section h2 { margin: 0 0 10px; font-family: Georgia, "Times New Roman", serif; font-size: 24px; font-weight: 500; }
     .info-section h3 { margin: 18px 0 5px; font-size: 13px; }
@@ -382,6 +383,8 @@
       latestResultText = [
         'SIGNAL CHECK — HEADLINE ANALYSIS',
         'Headline: ' + headline,
+        'Quick clickbait result: ' + (clickbait.probability >= 0.65 ? 'Likely Clickbait' : clickbait.probability <= 0.35 ? 'Likely Not Clickbait' : 'Unclear — mixed signals'),
+        'Quick fake-news pattern result: ' + (fakeReal.probability >= 0.65 ? 'More like fake-labelled examples' : fakeReal.probability <= 0.35 ? 'More like true-labelled examples' : 'Unclear — mixed signals'),
         'Clickbait model: ' + Math.round(clickbait.probability * 100) + '/100 (score for clickbait label)',
         'Fake/real dataset model: ' + Math.round(fakeReal.probability * 100) + '/100 (score for fake-labelled examples)',
         'Note: These are dataset-pattern estimates, not independent fact-checks or real-world probabilities.',
@@ -390,6 +393,12 @@
 
       results.innerHTML = `
         <div class="result-content">
+          <section class="quick-result" aria-label="Simple headline results">
+            <h3>Quick result</h3>
+            <div class="quick-result-row"><span>Clickbait check</span><strong>${clickbait.probability >= 0.65 ? 'Likely Clickbait' : clickbait.probability <= 0.35 ? 'Likely Not Clickbait' : 'Unclear — mixed signals'}</strong></div>
+            <div class="quick-result-row"><span>Fake-news pattern check</span><strong>${fakeReal.probability >= 0.65 ? 'More like fake-labelled examples' : fakeReal.probability <= 0.35 ? 'More like true-labelled examples' : 'Unclear — mixed signals'}</strong></div>
+            <p class="quick-result-note">These are quick model estimates. The fake-news pattern check does not verify whether a story is true or false.</p>
+          </section>
           <div class="result-summary">
             <h3>Two separate model checks</h3>
             <button class="copy-result-button" id="copy-result" type="button">Copy results</button>
@@ -537,16 +546,6 @@
             <div class="metric"><strong>${(report.macro_f1 * 100).toFixed(1)}%</strong><span>Macro F1</span></div>
           </div>
           <p class="model-metrics">Holdout set: ${report.holdout_rows.toLocaleString()} ${metricName} headlines · not a measure of real-world fact-checking accuracy.</p>
-          <div class="matrix-wrap">
-            <p class="matrix-title">Confusion matrix · actual rows / predicted columns</p>
-            <table class="confusion-matrix" aria-label="Confusion matrix for holdout evaluation">
-              <thead><tr><th>Actual / Predicted</th><th>${escapeHTML(positiveCaption)}</th><th>${escapeHTML(negativeCaption)}</th></tr></thead>
-              <tbody>
-                <tr><th>${escapeHTML(positiveCaption)}</th><td>${Number(report.true_positive).toLocaleString()} · TP</td><td>${Number(report.false_negative).toLocaleString()} · FN</td></tr>
-                <tr><th>${escapeHTML(negativeCaption)}</th><td>${Number(report.false_positive).toLocaleString()} · FP</td><td>${Number(report.true_negative).toLocaleString()} · TN</td></tr>
-              </tbody>
-            </table>
-          </div>
         </section>`;
     }
 
