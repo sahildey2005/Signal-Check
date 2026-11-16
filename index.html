@@ -421,7 +421,7 @@
             <h3>Quick result</h3>
             <div class="quick-result-row clickbait-verdict"><span>Clickbait verdict</span><strong>${clickbait.probability >= 0.5 ? 'CLICKBAIT' : 'NOT CLICKBAIT'}</strong></div>
             <div class="quick-result-row"><span>Fake-news pattern check</span><strong>${fakeReal.probability >= 0.65 ? 'More like fake-labelled examples' : fakeReal.probability <= 0.35 ? 'More like true-labelled examples' : 'Unclear — mixed signals'}</strong></div>
-            <p class="quick-result-note">The clickbait verdict uses a 50% model-score cutoff. The separate fake-news pattern check only compares learned dataset patterns; it does not verify whether a story is true or false.</p>
+            <p class="quick-result-note">The clickbait verdict uses a 50% model-score cutoff. The separate fake-news pattern check only compares learned dataset patterns; it does not verify whether a story is true or false. ${clickbait.learned ? 'Local pattern memory also influenced this clickbait score.' : 'Local pattern memory is still collecting high-confidence examples; it needs at least three similar patterns before adjusting a score.'}</p>
           </section>
           <div class="result-summary">
             <h3>Two separate model checks</h3>
@@ -558,7 +558,7 @@
       const totalWeight = strongest.reduce((sum, item) => sum + item.weight, 0);
       if (!totalWeight) return baseline;
       const learnedVote = strongest.reduce((sum, item) => sum + item.label * item.weight, 0) / totalWeight;
-      return { ...baseline, probability: baseline.probability * 0.85 + learnedVote * 0.15, learned: true };
+      return { ...baseline, probability: baseline.probability * 0.85 + learnedVote * 0.15, learned: true, learnedExamples: strongest.length };
     }
 
     function updateLearningStatus() {
