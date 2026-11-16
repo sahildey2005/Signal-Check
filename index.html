@@ -286,7 +286,7 @@
           <li>Headlines are cleaned and converted into word, two-word phrase, and writing-style features.</li>
           <li>Two Multinomial Naive Bayes classifiers learn patterns from their own labelled datasets.</li>
           <li>The trained weights and evaluation results are saved in <code>models.json</code>.</li>
-          <li>This browser app loads those saved values and predicts on the headline you enter. It does not retrain the models in your browser.</li>
+          <li>This browser app loads those saved values and predicts on the headline you enter. It also keeps a cautious self-learning memory of very high-confidence clickbait predictions on this browser and uses similar past patterns to make a limited adjustment to later checks.</li>
         </ol>
         <h3>Technology used</h3>
         <p>Python standard library for data preparation and model training; HTML, CSS and JavaScript for the browser interface; JSON for storing the trained model parameters.</p>
@@ -295,7 +295,8 @@
           <li>A headline alone is not enough to establish whether an article or claim is true.</li>
           <li>The model can learn topic, publisher, time-period, and dataset-label patterns rather than factual accuracy.</li>
           <li>Holdout metrics describe performance on a reserved portion of the supplied datasets. They do not guarantee performance on current news or unfamiliar sources.</li>
-          <li>Model scores are estimates of similarity to learned labels, not verified real-world probabilities.</li>
+          <li>Model scores are estimates of similarity to learned labels, not verified real-world probabilities. The local learning memory uses the model's own high-confidence predictions as provisional labels, so it can reinforce mistakes and is not a substitute for verified training data.</li>
+          <li>The self-learning memory stays in this browser's local storage; it is not uploaded or shared. Clearing this browser's site data removes it.</li>
           <li>Always read the full article, check its date and original sources, and compare independent reporting before sharing a claim.</li>
         </ul>
       </section>
@@ -365,7 +366,7 @@
         neutralSampleButton.disabled = false;
         resetButton.disabled = false;
         modelStatus.classList.add('ready');
-        modelStatus.textContent = `Models ready · ${trainedModels.report.clickbait_source.usable_unique_headlines.toLocaleString()} clickbait headlines · ${trainedModels.report.fake_real_source.usable_unique_headlines.toLocaleString()} fake/real headlines`;
+        updateLearningStatus();
       } catch (error) {
         analyzeButton.disabled = true;
         sampleButton.disabled = true;
@@ -389,7 +390,9 @@
       }
       headlineInput.removeAttribute('aria-invalid');
 
-      const clickbait = predict(headline, trainedModels.clickbait);
+      const clickbaitBase = predict(headline, trainedModels.clickbait);
+      const clickbait = applyLocalLearning(headline, clickbaitBase);
+      rememberHighConfidencePattern(headline, clickbaitBase.probability);
       const fakeReal = predict(headline, trainedModels.fake_real);
       const searchQuery = makeSearchQuery(headline);
       const links = makeCoverageLinks(searchQuery);
@@ -492,6 +495,77 @@
       } catch (error) {
         button.textContent = 'Copy unavailable';
       }
+    }
+
+    // Conservative, browser-local self-training memory for clickbait patterns.
+    // It stores feature tokens (not original headlines) from very high-confidence
+    // baseline predictions, then gives similar future headlines a small adjustment.
+    const LEARNING_KEY = 'signalCheckClickbaitLearningV1';
+    const LEARNING_LIMIT = 200;
+    const LEARNING_THRESHOLD = 0.92;
+
+    function readLearningMemory() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(LEARNING_KEY) || '[]');
+        return Array.isArray(saved) ? saved.filter(item =>
+          item && Array.isArray(item.features) && (item.label === 0 || item.label === 1)
+        ).slice(-LEARNING_LIMIT) : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function learningFeatures(text) {
+      return Object.keys(featureCounts(text))
+        .filter(feature => feature.startsWith('u:') || feature.startsWith('b:'))
+        .slice(0, 60);
+    }
+
+    function rememberHighConfidencePattern(text, probability) {
+      const confidence = Math.max(probability, 1 - probability);
+      const features = learningFeatures(text);
+      if (confidence < LEARNING_THRESHOLD || features.length < 4) return;
+      try {
+        const memory = readLearningMemory();
+        const label = probability >= 0.5 ? 1 : 0;
+        const signature = features.slice().sort().join('|');
+        if (memory.some(item => item.signature === signature)) return;
+        memory.push({ signature, features, label, confidence: Number(confidence.toFixed(3)) });
+        localStorage.setItem(LEARNING_KEY, JSON.stringify(memory.slice(-LEARNING_LIMIT)));
+        updateLearningStatus();
+      } catch (error) {
+        // Storage restrictions should never stop headline checks.
+      }
+    }
+
+    function applyLocalLearning(text, baseline) {
+      const currentFeatures = new Set(learningFeatures(text));
+      if (currentFeatures.size < 4) return baseline;
+      const neighbours = [];
+      for (const item of readLearningMemory()) {
+        const remembered = new Set(item.features);
+        let overlap = 0;
+        for (const feature of currentFeatures) if (remembered.has(feature)) overlap++;
+        const union = currentFeatures.size + remembered.size - overlap;
+        const similarity = union ? overlap / union : 0;
+        if (similarity >= 0.45) {
+          neighbours.push({ label: item.label, weight: similarity * Number(item.confidence || 0.92) });
+        }
+      }
+      neighbours.sort((a, b) => b.weight - a.weight);
+      const strongest = neighbours.slice(0, 5);
+      if (strongest.length < 3) return baseline;
+      const totalWeight = strongest.reduce((sum, item) => sum + item.weight, 0);
+      if (!totalWeight) return baseline;
+      const learnedVote = strongest.reduce((sum, item) => sum + item.label * item.weight, 0) / totalWeight;
+      return { ...baseline, probability: baseline.probability * 0.85 + learnedVote * 0.15, learned: true };
+    }
+
+    function updateLearningStatus() {
+      if (!trainedModels) return;
+      const count = readLearningMemory().length;
+      modelStatus.classList.add('ready');
+      modelStatus.textContent = `Models ready · local pattern memory: ${count} examples`;
     }
 
     function predict(text, model) {
