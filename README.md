@@ -50,6 +50,7 @@ The optimized trainer keeps the existing browser model fields. It makes two feat
 - Evidence cues show influential words, phrases, and headline-style features.
 - Holdout evaluation metrics and confusion matrices are displayed for both models.
 - Copy results lets users copy a short summary of the current analysis.
+- A compact “Was this check useful?” prompt stores anonymous Yes/No usefulness counts in the current browser's local storage. It does not collect the headline or retrain/change the classifiers; shared learning requires a backend and labelled clickbait/non-clickbait examples.
 - The project guide explains the difference between clickbait and misinformation, the training pipeline, technologies, and limitations.
 - Related coverage and fact-check search links help users continue checking a claim.
 
